@@ -5,11 +5,15 @@ import { Login } from "../model/admin.js";
 
 dotenv.config();
 
+// 🔥 detect environment
+const isProduction = process.env.NODE_ENV === "production";
+
+
+// ================= CREATE ADMIN =================
 export const createadmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if admin already exists
     const existingAdmin = await Login.findOne({ email });
     if (existingAdmin) {
       return res.status(400).json({
@@ -18,7 +22,8 @@ export const createadmin = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10); 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     await Login.create({
       email,
       password: hashedPassword,
@@ -38,11 +43,11 @@ export const createadmin = async (req, res) => {
 };
 
 
+// ================= LOGIN =================
 export const loginadmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    
     const admin = await Login.findOne({ email });
     if (!admin) {
       return res.status(401).json({
@@ -62,13 +67,14 @@ export const loginadmin = async (req, res) => {
     const token = jwt.sign(
       { id: admin._id, role: "admin" },
       process.env.JWT_SECRET,
-      { expiresIn: "24h" },
+      { expiresIn: "24h" }
     );
 
+    // ✅ FIXED COOKIE SETTINGS
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
-      sameSite: "lax",
+      secure: isProduction,                 // true in production
+      sameSite: isProduction ? "none" : "lax", // cross-origin fix
       maxAge: 24 * 60 * 60 * 1000,
     });
 
@@ -76,6 +82,7 @@ export const loginadmin = async (req, res) => {
       success: true,
       message: "Login successful",
     });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -85,18 +92,21 @@ export const loginadmin = async (req, res) => {
   }
 };
 
+
+// ================= LOGOUT =================
 export const logoutadmin = async (req, res) => {
   try {
     res.clearCookie("token", {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
     });
 
     res.status(200).json({
       success: true,
       message: "Logout successful",
     });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -107,9 +117,10 @@ export const logoutadmin = async (req, res) => {
 };
 
 
+// ================= VERIFY COOKIE =================
 export const getcookie = async (req, res) => {
   try {
-    const token = req.cookies.token;
+    const token = req.cookies?.token;
 
     if (!token) {
       return res.status(401).json({
@@ -117,6 +128,7 @@ export const getcookie = async (req, res) => {
         message: "No token found",
       });
     }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     res.status(200).json({
@@ -124,6 +136,7 @@ export const getcookie = async (req, res) => {
       message: "Token valid",
       user: decoded,
     });
+
   } catch (error) {
     res.status(401).json({
       success: false,
